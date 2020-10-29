@@ -4,7 +4,50 @@ char *getChunkData(int mapperID) {
 }
 
 // sends chunks of size 1024 to the mappers in RR fashion
+typedef struct msg_buffer {
+    long mtype;
+    char mtext[MSGSIZE];
+} message;
+
 void sendChunkData(char *inputFile, int nMappers) {
+	key_t key;
+	int msgid, ok, ok2;
+	message msg;
+
+	//generate unique key
+	key = ftok("project", 2);
+
+	//creates a message queue
+	msgid = msgget(key, PERM | IPC_CREAT);
+
+	FILE* file = fopen (inputFile, "r");
+	char line[1024];
+
+	//construct chunks of 1024 bytes each and send
+	//each chunk to a mapper
+	while (fgets (line, sizeof(line), file)){
+		chunk = getNextChunk(inputFile) // how to do this??
+		ok = msgsnd(msgid, (void *) &chunk, mapperID) //where do you get mapperID
+
+	}
+
+	//send end message to mappers
+	for (int i=0; i<mapperID; i++){
+		msg.mtype = 111;
+		memset(msg.mtext, '\0', MSGSIZE);
+		sprintf(msg.mtext, "END");
+		ok2 = msgsnd(msgid, (void *)&msg, MSGSIZE, mapperID);
+	}
+
+	for (int i =0; i<nMappers; i++){
+		wait(msgid);
+	}
+
+	//close message queue
+	msgctl(msgid, IPC_RMID, NULL);
+
+	fclose(file);
+
 }
 
 // hash function to divide the list of word.txt files across reducers
