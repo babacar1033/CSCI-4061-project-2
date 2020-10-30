@@ -56,7 +56,7 @@ void sendChunkData(char *inputFile, int nMappers) {
                 strcat(line,wholeString);//--> concatenate wholeString to line (which is chunk thus far)
                 strcat(line,checkString);//--> whitespace character
                 if(currentChunkSize == chunkSize){
-                    ok = msgsnd(msgid, (void *) &line, mapperID, 0);
+                    ok = msgsnd(msgid, (void *) &line, mapperID);
                     if(mapperID < nMappers){
                         mapperID++;
                     }
@@ -68,7 +68,7 @@ void sendChunkData(char *inputFile, int nMappers) {
                 memset(wholeString, '\0', chunkSize);//--> so reset "wholeString"
             }else if(currentChunkSize > chunkSize){
                 //--> then DO NOT concatenate whole string to "line"
-                ok = msgsnd(msgid, (void *) &line, mapperID, 0);
+                ok = msgsnd(msgid, (void *) &line, mapperID);
                 if(mapperID < nMappers){
                     mapperID++;
                 }
