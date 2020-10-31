@@ -124,7 +124,16 @@ int getInterData(char *key, int reducerID) {
 
     key = msgrcv (messageID, (void *)&one, sizeof (one.mtext), reducerID, 0);
 
+    //check for END message
+    if(one.mtext == "END"){
+        return 0;
+    }else{
+        return 1;
+    }
 
+    return key;
+
+    //from week 7, 2 sync discussion slides, I'm a little confused about returning 0 or 1, or returning the keyS
 }
 
 
