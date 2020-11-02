@@ -197,7 +197,7 @@ void shuffle(int nMappers, int nReducers) {
      msg.msgType = reducerId;
      memset(msg.msgText, '\0', MSGSIZE);
      
-     msgsnd(mid,cwd MSGSIZE,0); // To continue tomorrow ..............
+     msgsnd(mid,cwd ,MSGSIZE,0); // 
      
      free(cwd);
     }
@@ -206,15 +206,27 @@ void shuffle(int nMappers, int nReducers) {
   }
 
 }
+    //send end message to reducers
 
      for (int i=0; i<nReducers; i++)
     {
 	msg.mtype = reducerId;//--> use mapperID (i) as the tag
 	memset(msg.msgText, '\0', MSGSIZE);
 	sprintf(msg.msgText, "END");
-	msgsnd(mid, (void *)&msg, MSGSIZE, i);
+	msgsnd(mid, (void *)&msg, sizeof(msg.msgText), 0);
 
      }
+
+     //wait for ACK from the reducers for END notification
+
+     for (int i=0; i<nReducers; i++)
+     {
+	wait(&msg);
+     }
+
+     //close the message queue
+
+     msgctl(mid, IPC_RMID, NULL);
 
 }
 
