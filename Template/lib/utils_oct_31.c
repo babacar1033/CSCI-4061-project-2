@@ -7,8 +7,6 @@ char *getChunkData(int mapperID)
 
 {
 
-
-
   //declare the same key as in the "sendchunkdata". To be used again to open the message queue.
 
   key_t key = ftok("project",2); // convert the pathname "key" and the reducer identifier to a System V IPC
@@ -239,14 +237,12 @@ void shuffle(int nMappers, int nReducers)
 
   //wait for ACK from the reducers for END notification
 
-  for (int i=0; i<nReducers; i++)
-  {
-    wait(mid);
-  }
+//  for (int i=0; i<nReducers; i++)
+//  {
+//    wait(mid);
+//  }
 
-  //close the message queue
-
-  msgctl(mid, IPC_RMID, NULL);
+  
 
 }
 
