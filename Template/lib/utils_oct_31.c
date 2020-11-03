@@ -3,8 +3,6 @@
 #define PERM 0666//--> user, group, and others each have only read and write permissions
 #define ERROR 0//for errors in the code
 
-//msgctl(msgid, IPC_RMID, NULL); --> Do at beginning of program
-
 char *getChunkData(int mapperID)
 
 {
@@ -32,7 +30,7 @@ char *getChunkData(int mapperID)
 
 
 }
-
+// sends chunks of size 1024 to the mappers in RR fashion
 void sendChunkData(char *inputFile, int nMappers)
 
 {
@@ -125,42 +123,36 @@ void sendChunkData(char *inputFile, int nMappers)
 // hash function to divide the list of word.txt files across reducers
 //http://www.cse.yorku.ca/~oz/hash.html
 int hashFunction(char* key, int reducers){
-  unsigned long hash = 0;
-  int c;
+	unsigned long hash = 0;
+    int c;
 
-  while ((c = *key++)!='\0')
-    hash = c + (hash << 6) + (hash << 16) - hash;
+    while ((c = *key++)!='\0')
+        hash = c + (hash << 6) + (hash << 16) - hash;
 
-  return (hash % reducers);
+    return (hash % reducers);
 }
 
 int getInterData(char *key, int reducerID) {
-  message one;
-  int messageID;
-  key_t key;
+    message one;
+    int messageID;
+    key_t key1;
 
-  key = ftok("project", 2);//file path is the "key"
+    key1 = ftok(key, awalx003);//file path is the "key"
 
-  //open message queue
-  mid = msget (key, PERM | IPC_CREAT);
+    //open message queue
+    messageID = msget (key1, PERM | IPC_CREAT);
 
-  key = msgrcv (messageID, (void *)&one, sizeof (one.mtext), reducerID, 0);
+    key1 = msgrcv (messageID, (void *)&one, sizeof (one.mtext), reducerID, 0);
 
-  //check for END message
-  if(one.mtext == "END")
-  {
-    return 0;
-  }
-  else
-    {
-    return 1;
+    //check for END message
+    if(one.mtext == "END"){
+        *key = key;
+        return 0;//done reading data
+    }else{
+        *key = key;
+        return 1;//more data to come
     }
-
-  return key;
-
-  //from week 7, 2 sync discussion slides, I'm a little confused about returning 0 or 1, or returning the keyS
 }
-
 
 void shuffle(int nMappers, int nReducers)
 
@@ -258,62 +250,68 @@ void shuffle(int nMappers, int nReducers)
 
 }
 
+// check if the character is valid for a word
+int validChar(char c){
+	return (tolower(c) >= 'a' && tolower(c) <='z') ||
+					(c >= '0' && c <= '9');
+}
+
 char *getWord(char *chunk, int *i){
-  char *buffer = (char *)malloc(sizeof(char) * chunkSize);
-  memset(buffer, '\0', chunkSize);
-  int j = 0;
-  while((*i) < strlen(chunk)) {
-    // read a single word at a time from chunk
-    // printf("%d\n", i);
-    if (chunk[(*i)] == '\n' || chunk[(*i)] == ' ' || !validChar(chunk[(*i)]) || chunk[(*i)] == 0x0) {
-      buffer[j] = '\0';
-      if(strlen(buffer) > 0){
-        (*i)++;
-        return buffer;
-      }
-      j = 0;
-      (*i)++;
-      continue;
-    }
-    buffer[j] = chunk[(*i)];
-    j++;
-    (*i)++;
-  }
-  if(strlen(buffer) > 0)
-    return buffer;
-  return NULL;
+	char *buffer = (char *)malloc(sizeof(char) * chunkSize);
+	memset(buffer, '\0', chunkSize);
+	int j = 0;
+	while((*i) < strlen(chunk)) {
+		// read a single word at a time from chunk
+		// printf("%d\n", i);
+		if (chunk[(*i)] == '\n' || chunk[(*i)] == ' ' || !validChar(chunk[(*i)]) || chunk[(*i)] == 0x0) {
+			buffer[j] = '\0';
+			if(strlen(buffer) > 0){
+				(*i)++;
+				return buffer;
+			}
+			j = 0;
+			(*i)++;
+			continue;
+		}
+		buffer[j] = chunk[(*i)];
+		j++;
+		(*i)++;
+	}
+	if(strlen(buffer) > 0)
+		return buffer;
+	return NULL;
 }
 
 void createOutputDir(){
-  mkdir("output", ACCESSPERMS);
-  mkdir("output/MapOut", ACCESSPERMS);
-  mkdir("output/ReduceOut", ACCESSPERMS);
+	mkdir("output", ACCESSPERMS);
+	mkdir("output/MapOut", ACCESSPERMS);
+	mkdir("output/ReduceOut", ACCESSPERMS);
 }
 
 char *createMapDir(int mapperID){
-  char *dirName = (char *) malloc(sizeof(char) * 100);
-  memset(dirName, '\0', 100);
-  sprintf(dirName, "output/MapOut/Map_%d", mapperID);
-  mkdir(dirName, ACCESSPERMS);
-  return dirName;
+	char *dirName = (char *) malloc(sizeof(char) * 100);
+	memset(dirName, '\0', 100);
+	sprintf(dirName, "output/MapOut/Map_%d", mapperID);
+	mkdir(dirName, ACCESSPERMS);
+	return dirName;
 }
 
 void removeOutputDir(){
-  pid_t pid = fork();
-  if(pid == 0){
-    char *argv[] = {"rm", "-rf", "output", NULL};
-    if (execvp(*argv, argv) < 0) {
-      printf("ERROR: exec failed\n");
-      exit(1);
-    }
-    exit(0);
-  } else{
-    wait(NULL);
-  }
+	pid_t pid = fork();
+	if(pid == 0){
+		char *argv[] = {"rm", "-rf", "output", NULL};
+		if (execvp(*argv, argv) < 0) {
+			printf("ERROR: exec failed\n");
+			exit(1);
+		}
+		exit(0);
+	} else{
+		wait(NULL);
+	}
 }
 
 void bookeepingCode(){
-  removeOutputDir();
-  sleep(1);
-  createOutputDir();
+	removeOutputDir();
+	sleep(1);
+	createOutputDir();
 }
