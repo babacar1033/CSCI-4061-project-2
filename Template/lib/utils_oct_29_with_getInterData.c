@@ -2,6 +2,9 @@
 #include <sys/msg.h>//-->in order to use message queues
 #define PERM 0666//--> user, group, and others each have only read and write permissions
 #define ERROR 0//for errors in the code
+#define LESS_THAN_CHUNKSIZE 1
+#define EQUAL_CHUNKSIZE 2
+#define MORE_THAN_CHUNKSIZE 3
 
 //msgctl(msgid, IPC_RMID, NULL); --> Do at beginning of program
 
@@ -25,13 +28,13 @@ void sendChunkData(char *inputFile, int nMappers) {
     int currentChunkSize = 0;
 
 	//generate unique key
-	key = ftok("project", 2);//--> use your x500 as the second argument of ftok(): a TA talks about this in the most recent Canvas announcement
+	key = ftok("./test/T1/F1.txt", 2);//--> use your x500 as the second argument of ftok(): a TA talks about this in the most recent Canvas announcement
 
 	//creates a message queue
 	msgid = msgget(key, PERM | IPC_CREAT);
 
 	FILE* file = fopen (inputFile, "r");
-	char line[chunkSize];//--> chunkSize Macro is defined in "utils.h"
+	//char line[chunkSize];//--> chunkSize Macro is defined in "utils.h"
 
 	//--> error checking for fopen() --> see if the file pointer points to anything non-NULL
 	if(file == NULL){
@@ -39,7 +42,7 @@ void sendChunkData(char *inputFile, int nMappers) {
         exit(ERROR);
     }
 
-    mapperID = 0;
+    mapperID = 1;
 
 	//construct chunks of 1024 bytes each and send
 	//each chunk to a mapper
@@ -49,34 +52,12 @@ void sendChunkData(char *inputFile, int nMappers) {
             strcat(wholeString,checkString);//--> concatenate to wholeString
 		}else{//--> checkString != ' '
             //--> if at this point, we read one whole string in inputFile
-
             //--> add size of a whole string
             currentChunkSize += (characterCount-1);//--> the "-1" is to account for the space
-            if(currentChunkSize <= chunkSize){
-                strcat(line,wholeString);//--> concatenate wholeString to line (which is chunk thus far)
-                strcat(line,checkString);//--> whitespace character
-                if(currentChunkSize == chunkSize){
-                    ok = msgsnd(msgid, (void *) &line, mapperID)
-                    if(mapperID < nMappers){
-                        mapperID++;
-                    }
-                    //--> reset characterCount, currentChunkSize, and "line" (chunk)
-                    characterCount = 0;
-                    currentChunkSize = 0;
-                    memset(line, '\0', chunkSize);//--> reset "line" (chunk)
-                }
-                memset(wholeString, '\0', chunkSize);//--> so reset "wholeString"
-            }else if(currentChunkSize > chunkSize){
-                //--> then DO NOT concatenate whole string to "line"
-                ok = msgsnd(msgid, (void *) &line, mapperID)
-                if(mapperID < nMappers){
-                    mapperID++;
-                }
-                //--> reset currentChunkSize (because we are making a new chunk), and reset "line" (chunk)
-                currentChunkSize = 0;
-                memset(line, '\0', chunkSize);//--> reset "line" (chunk)
-
-                currentChunkSize += (characterCount-1);//--> at this point, I want to go back to line 53 --> I'm not sure how to implement this
+            int x = compareToChunkSize(currentChunkSize, characterCount, wholeString, nMappers, msg);
+            if(x == MORE_THAN_CHUNKSIZE){
+                memset(msg.mtext, '\0', MSGSIZE);//--> reset "line" (chunk)
+                compareToChunkSize((characterCount-1), characterCount, wholeString, nMappers, msg);
             }
 		}
 	}
@@ -100,6 +81,40 @@ void sendChunkData(char *inputFile, int nMappers) {
 	fclose(file);
 }
 
+//helper function for sendChunkData()
+int compareToChunkSize(int currentChunkSize, int characterCount, char[] wholeString, int nMappers, message msg){
+    if(currentChunkSize < chunkSize){
+        strcat(msg.mtext,wholeString);//--> concatenate wholeString to msg.text (which is chunk data thus far)
+        strcat(msg.mtext,' ');//--> whitespace character
+        memset(wholeString, '\0', chunkSize);//--> so reset "wholeString"
+        return LESS_THAN_CHUNKSIZE;
+    }else if(currentChunkSize > chunkSize){
+        if(strcmp(msg.text, '\0') == 0){//msg.text is not just the null terminator
+            printf("Word in chunk is too long - cannot be sent without being separated.");
+            exit(ERROR);
+        }
+        //--> then DO NOT concatenate whole string to "msg.text"
+        ok = msgsnd(msgid, (void *) &msg, mapperID);
+        if(mapperID < nMappers){
+            mapperID++;
+        }
+        return MORE_THAN_CHUNKSIZE;
+    }else{
+        strcat(msg.mtext,wholeString);//--> concatenate wholeString to msg.text (which is chunk data thus far)
+        strcat(msg.mtext,' ');//--> whitespace character
+        ok = msgsnd(msgid, (void *) &msg, mapperID);
+        if(mapperID < nMappers){
+            mapperID++;
+        }
+        //--> reset characterCount, currentChunkSize, and "msg.text" (chunk data)
+        characterCount = 0;
+        currentChunkSize = 0;
+        memset(msg.mtext, '\0', MSGSIZE);//--> reset "msg.text" (chunk data)
+        memset(wholeString, '\0', chunkSize);//--> so reset "wholeString"
+        return EQUAL_CHUNKSIZE;
+    }
+}
+
 // hash function to divide the list of word.txt files across reducers
 //http://www.cse.yorku.ca/~oz/hash.html
 int hashFunction(char* key, int reducers){
@@ -115,25 +130,23 @@ int hashFunction(char* key, int reducers){
 int getInterData(char *key, int reducerID) {
     message one;
     int messageID;
-    key_t key;
+    key_t key1;
 
-    key = ftok(key, awalx003);//file path is the "key"
+    key1 = ftok(key, awalx003);//file path is the "key"
 
     //open message queue
-    mid = msget (key, PERM | IPC_CREAT);
+    messageID = msget (key1, PERM | IPC_CREAT);
 
-    key = msgrcv (messageID, (void *)&one, sizeof (one.mtext), reducerID, 0);
+    key1 = msgrcv (messageID, (void *)&one, sizeof (one.mtext), reducerID, 0);
 
     //check for END message
     if(one.mtext == "END"){
-        return 0;
+        *key = key;
+        return 0;//done reading data
     }else{
-        return 1;
+        *key = key;
+        return 1;//more data to come
     }
-
-    return key;
-
-    //from week 7, 2 sync discussion slides, I'm a little confused about returning 0 or 1, or returning the keyS
 }
 
 
