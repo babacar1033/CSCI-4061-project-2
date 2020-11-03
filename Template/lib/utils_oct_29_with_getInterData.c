@@ -28,7 +28,7 @@ void sendChunkData(char *inputFile, int nMappers) {
     int currentChunkSize = 0;
 
 	//generate unique key
-	key = ftok("./test/T1/F1.txt", 2);//--> use your x500 as the second argument of ftok(): a TA talks about this in the most recent Canvas announcement
+	key = ftok(".", 2);//--> use your x500 as the second argument of ftok(): a TA talks about this in the most recent Canvas announcement
 
 	//creates a message queue
 	msgid = msgget(key, PERM | IPC_CREAT);
@@ -141,10 +141,9 @@ int getInterData(char *key, int reducerID) {
 
     //check for END message
     if(one.mtext == "END"){
-        *key = key;
         return 0;//done reading data
     }else{
-        *key = key;
+        strcpy(key, m.text);//copy m.text into key
         return 1;//more data to come
     }
 }
