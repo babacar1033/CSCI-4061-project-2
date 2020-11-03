@@ -234,7 +234,7 @@ void shuffle(int nMappers, int nReducers)
 
   for (int i=0; i<nReducers; i++)
  {
-    msg.mtype = nReducers + 1;//--> use reducerID (i) as the tag
+    msg.msgType = nReducers + 1;//--> use reducerID (i) as the tag
     sprintf(msg.msgText, "END");
     int b = msgsnd(mid, (void *) &msg, sizeof(msg.msgText), 0);
 
