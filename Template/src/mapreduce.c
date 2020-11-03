@@ -1,4 +1,5 @@
 #include "mapreduce.h"
+#include "utils.h"
 
 // execute executables using execvp
 void execute(char **argv, int nProcesses){
@@ -23,6 +24,19 @@ void execute(char **argv, int nProcesses){
 }
 
 int main(int argc, char *argv[]) {
+
+
+
+	//open message queue
+
+	struct msgBuffer msg;
+
+	Key_t key = ftok("project", 2);
+
+	int mid = msgget(key, 0644 | IPC_CREAT);
+
+
+	
 	
 	if(argc < 4) {
 		printf("Less number of arguments.\n");
@@ -78,6 +92,10 @@ int main(int argc, char *argv[]) {
 
 	// wait for all children to complete execution
     while (wait(&status) > 0);
+
+  //close the message queue
+
+  msgctl(mid, IPC_RMID, NULL);
 
 	return 0;
 }
