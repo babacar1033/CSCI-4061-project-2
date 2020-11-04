@@ -39,10 +39,8 @@ char *getChunkData(int mapperID)
   	perror("Could not receive the data");
   	exit(ERROR);
   }else{
-  	//free(ptr);
   	char *v = malloc(MSGSIZE);
   	strcpy(v, msg.msgText);
-  	//free(
   	return v;
   }
   
