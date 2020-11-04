@@ -56,6 +56,7 @@ int compareToChunkSize(int currentChunkSize, int characterCount, char *wholeStri
     if(currentChunkSize < chunkSize){
         strcat(msg.msgText,wholeString);//concatenate wholeString to msg.msgText (which is chunkData thus far)
         strcat(msg.msgText," ");//add whitespace character at end of msg.msgText
+        printf("First message%s", msg.msgText);
         memset(wholeString, '\0', chunkSize);//reset "wholeString" because we are going to read a new whole string from inputFile
         return LESS_THAN_CHUNKSIZE;
     }else if(currentChunkSize > chunkSize){
@@ -75,6 +76,7 @@ int compareToChunkSize(int currentChunkSize, int characterCount, char *wholeStri
         
         //At this point, DO NOT concatenate whole string to "msg.msgText" because according to the else if case, the size of the whole string exceeds 1024 bytes
         //we will add this string to the next chunk. 
+        printf("Second message%s", msg.msgText);
         ok = msgsnd(msgid, (void *) &msg, sizeof(msg.msgText), mapperID);//send this chunk (without the long whole string) off to a mapper
         if(ok == -1){
             perror("Could not send the data HERE2");
@@ -90,6 +92,7 @@ int compareToChunkSize(int currentChunkSize, int characterCount, char *wholeStri
     }else{
         strcat(msg.msgText,wholeString);//concatenate wholeString to msg.msgText (which is chunk data thus far)
         strcat(msg.msgText," ");//add whitespace character at end of msg.msgText
+        printf("Third message%s", msg.msgText);
         
         ok = msgsnd(msgid, (void *) &msg, sizeof(msg.msgText), mapperID);//send this chunk off to a mapper because the chunkData is full
         if(ok == -1){
@@ -125,6 +128,7 @@ void sendChunkData(char *inputFile, int nMappers)
     	char wholeString[chunkSize];//holds one string read from inputFile
     	//memset(wholeString, '\0', chunkSize);//to make sure it is always null-terminated
     	int currentChunkSize = 0;
+    	
 
 	//generate unique key
 	key = ftok(".", 5331326);
@@ -145,6 +149,7 @@ void sendChunkData(char *inputFile, int nMappers)
 	//construct chunks of 1024 bytes each and send each chunk to a mapper
 	checkString = fgetc (file);
 	while (checkString != EOF){//check to see if reading has not reached at the end-of-file
+		printf("Got here");
 		characterCount++;//indicates that one character has been read for current chunk
 		if(checkString != ' '){//concatenate what fgetc() returned until a whitespace is encountered, which indicates that we are going to read a new string
             		strncat(wholeString,&checkString, 1);

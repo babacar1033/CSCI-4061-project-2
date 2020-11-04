@@ -69,9 +69,9 @@ int main(int argc, char *argv[]) {
 		sendChunkData(inputFile, nMappers);
 		 //close the message queue
 
-  		msgctl(mid, IPC_RMID, 0);
-		printf("here a");
-		exit(0);
+  		//msgctl(mid, IPC_RMID, 0);
+		
+		//exit(0);
 	}
 	sleep(1);
 
