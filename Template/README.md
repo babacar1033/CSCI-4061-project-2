@@ -4,14 +4,22 @@ name : Babacar Diouf, Shubhavi Arya, Rezkath Awal
 x500 : diouf006, aryax014, awalx003
 Project Group Name: Project Group 32
 
-- The purpose of your program: The purpose of our program is to implement the functions of the Map Reduce Algorithm that 
-involve Inter-Process Communication. *FINISH* 
+- The purpose of your program: The purpose of our program is to take an input file and figure out how many duplicates of each word there are in
+the file.   In order to accomplish this task, some functions use Inter-Process Communication in order to send data from the file to different 
+processes.
 
-- How to compile the program: One can compile our program by first using the command "make" in a shell.
+- How to compile the program: 
+	1) Use the command "make clean" in a shell.
+	2) In that same shell, use the command "make mapreduce"
+	3) In that same shell, use the command "make t1"
 
-- What exactly your program does:
+- What exactly your program does: Our program first reads individual strings from an input file and adds them to a string that represents
+chunkData and cannot exceed 1024 bytes.  This process repeats until the input file is completely read.  Then, the master process 
 
-- Any assumptions outside this document:
+   
+
+- Any assumptions outside this document: 
+	1) We have modified the main() function in mapreduce.c so that we can open a message queue, get a message ID and close the message queue.
 
 - Contribution by each member of the team:
 	-Contribution by Babacar Diouf: 
@@ -26,7 +34,3 @@ involve Inter-Process Communication. *FINISH*
 		-Wrote this README file.
 	
 
-The README file does not have to be long, but must properly describe the above points. The code should
-be well commented, it doesn’t mean each and every line. When a TA looks at your code he/she/they
-should be able to understand the jist. You might want to focus on the “why” part, rather than the “how”,
-when you add comments. 
