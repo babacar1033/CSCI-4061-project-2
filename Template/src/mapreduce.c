@@ -1,6 +1,7 @@
 #include "mapreduce.h"
 #define PERM 0666//--> user, group, and others each have only read and write permissions
 #include "utils.h"
+#define ERROR 0//for errors in the code
 
 // execute executables using execvp
 void execute(char **argv, int nProcesses){
@@ -25,19 +26,6 @@ void execute(char **argv, int nProcesses){
 }
 
 int main(int argc, char *argv[]) {
-
-
-	
-	//open message queue
-
-	struct msgBuffer msg;
-
-	key_t key = ftok(".", 5331326);
-
-	int mid = msgget(key, PERM | IPC_CREAT);
-	
-
-	
 	
 	if(argc < 4) {
 		printf("Less number of arguments.\n");
@@ -67,11 +55,8 @@ int main(int argc, char *argv[]) {
 	if(pid == 0){
 		//send chunks of data to the mappers in RR fashion
 		sendChunkData(inputFile, nMappers);
-		 //close the message queue
-
-  		//msgctl(mid, IPC_RMID, 0);
 		
-		//exit(0);
+		exit(0);
 	}
 	sleep(1);
 
@@ -91,9 +76,6 @@ int main(int argc, char *argv[]) {
 	printf("here d");
 	if(pid == 0){
 		shuffle(nMappers, nReducers);
-		 //close the message queue
-
- 		msgctl(mid, IPC_RMID, 0);
  		
 		exit(0);
 	}
@@ -105,8 +87,20 @@ int main(int argc, char *argv[]) {
 
 	// wait for all children to complete execution
     while (wait(&status) > 0);
+    
+    //generate unique key
+	key_t key = ftok(".", 5331326);
+	
+	//error handling for ftok()
+  	if(key == -1){
+  		perror("Key could not be generated");
+  		exit(ERROR);
+	}
+	
+	//creates a message queue
+	int msgid = msgget(key, PERM | IPC_CREAT);
 
- 
-
+ 	
+	msgctl(msgid, IPC_RMID, 0);
 	return 0;
 }
