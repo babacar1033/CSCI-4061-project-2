@@ -1,41 +1,37 @@
 #include "utils.h"
-//#include "mapper.h"//to use mapperID variable
 #include <stdbool.h>//to use boolean variable
 #include <sys/msg.h>//-->in order to use message queues
 #define PERM 0666//--> user, group, and others each have only read and write permissions
 #define ERROR 0//for errors in the code
+
+//Macros that indicate if cases in sendChunkData's helper function
 #define LESS_THAN_CHUNKSIZE 1
 #define EQUAL_CHUNKSIZE 2
 #define MORE_THAN_CHUNKSIZE 3
-int mapperID;
+int mapperID;//global variable to use mapperID in functions in this file
 
 char *getChunkData(int mapperID)
 
 {
-
-
-
   //declare the same key as in the "sendchunkdata". To be used again to open the message queue.
-
   key_t key = ftok(".",5331326); // convert the pathname "key" and the reducer identifier to a System V IPC
 
-  //declare a variable msg of type struct msgBuffer to represent the chunk4
-
+  //declare a variable msg of type struct msgBuffer to represent the chunk
   struct msgBuffer msg;
 
-  //open mesage queue
+  //open message queue
+  int mid = msgget(key, PERM| IPC_CREAT); // use PERM where user, groups and other can read and write. create the message queue if it's not done so yet
 
-  int mid = msgget(key, PERM| IPC_CREAT); // use permission 0644 where user, groups and other can read and write. create the message queue if it's not done so yet
-
+  //error handling
   if(mid == -1)
   {
-    exit(ERROR); //error handling. return -1 and set errno
+    perror("Could not get message identifier");
+    exit(ERROR); //return -1 and set errno
   }
-  
-  //struct msgBuffer *ptr = malloc(MSGSIZE);
 
   int checkStatus = msgrcv(mid, &msg, sizeof(msg.msgText), mapperID, 0); //receive data from the master who was supposed to send a specific mapperID
   if(checkStatus == -1){
+  	//error handling
   	perror("Could not receive the data");
   	exit(ERROR);
   }else{
@@ -48,144 +44,143 @@ char *getChunkData(int mapperID)
 
 //helper function for sendChunkData()
 int compareToChunkSize(int currentChunkSize, int characterCount, char *wholeString, int nMappers, struct msgBuffer msg){
-    //int ok;
-    //int msgid
-    
     key_t key;
     int msgid, ok;
     
     //generate unique key
-    key = ftok(".", 5331326);//--> use your x500 as the second argument of ftok(): a TA talks about this in the most recent Canvas announcement
+    key = ftok(".", 5331326);
 
     //creates a message queue
     msgid = msgget(key, PERM | IPC_CREAT);
     
     if(currentChunkSize < chunkSize){
-        strcat(msg.msgText,wholeString);//--> concatenate wholeString to msg.text (which is chunk data thus far)
-        strcat(msg.msgText," ");//--> whitespace character
-        memset(wholeString, '\0', chunkSize);//--> so reset "wholeString"
-        msgctl(msgid, IPC_RMID, NULL);//close the message queue before I leave this function
+        strcat(msg.msgText,wholeString);//concatenate wholeString to msg.msgText (which is chunkData thus far)
+        strcat(msg.msgText," ");//add whitespace character at end of msg.msgText
+        memset(wholeString, '\0', chunkSize);//reset "wholeString" because we are going to read a new whole string from inputFile
         return LESS_THAN_CHUNKSIZE;
     }else if(currentChunkSize > chunkSize){
     	bool yes = true;
     	int i;
     	for(i = 0; i < MSGSIZE; i++){
     		if(msg.msgText[i] != '\0'){
-    			yes = false;//I did not call memset on msg.msgText
+    			yes = false;//memset() was not just called on msg.msgText
     		}
     	}
-        if(true){//msg.text is just null terminators
+        if(true){//msg.msgText just consists of null terminators
+            //at this point, we just started a new chunk to add chunkData to.  Also, in the else if, the size of the whole string exceeds 1024 bytes
+            //so we cannot add it to the chunk
             perror("Word in chunk is too long - cannot be sent without being separated.");
             exit(ERROR);
         }
-        //--> then DO NOT concatenate whole string to "msg.text"
-        ok = msgsnd(msgid, (void *) &msg, MSGSIZE, mapperID);
+        
+        //At this point, DO NOT concatenate whole string to "msg.msgText" because according to the else if case, the size of the whole string exceeds 1024 bytes
+        //we will add this string to the next chunk. 
+        ok = msgsnd(msgid, (void *) &msg, sizeof(msg.msgText), mapperID);//send this chunk (without the long whole string) off to a mapper
         if(ok == -1){
-            perror("Could not send the data");
+            perror("Could not send the data HERE2");
             exit(ERROR);
         }
         
         
         if(mapperID < nMappers){
-            mapperID++;
+            mapperID++;//go to the next mapper
         }
-        msgctl(msgid, IPC_RMID, NULL);//close the message queue before I leave this function
+        
         return MORE_THAN_CHUNKSIZE;
     }else{
-        strcat(msg.msgText,wholeString);//--> concatenate wholeString to msg.text (which is chunk data thus far)
-        strcat(msg.msgText," ");//--> whitespace character
-        ok = msgsnd(msgid, (void *) &msg, MSGSIZE, mapperID);
+        strcat(msg.msgText,wholeString);//concatenate wholeString to msg.msgText (which is chunk data thus far)
+        strcat(msg.msgText," ");//add whitespace character at end of msg.msgText
+        
+        ok = msgsnd(msgid, (void *) &msg, sizeof(msg.msgText), mapperID);//send this chunk off to a mapper because the chunkData is full
         if(ok == -1){
-            perror("Could not send the data");
+            perror("Could not send the data HERE1");
             exit(ERROR);
         }
+        
         if(mapperID < nMappers){
-            mapperID++;
+            mapperID++;//go to the next mapper
         }
-        //--> reset characterCount, currentChunkSize, and "msg.text" (chunk data)
+        
+        //reset characterCount, currentChunkSize, and "msg.msgText" (chunk data) because we are to start a new chunk
         characterCount = 0;
         currentChunkSize = 0;
-        memset(msg.msgText, '\0', MSGSIZE);//--> reset "msg.text" (chunk data)
-        memset(wholeString, '\0', chunkSize);//--> so reset "wholeString"
-        msgctl(msgid, IPC_RMID, NULL);//close the message queue before I leave this function
+        memset(msg.msgText, '\0', MSGSIZE);
+        
+        memset(wholeString, '\0', chunkSize);//reset "wholeString" because we are going to read a new whole string from inputFile
         return EQUAL_CHUNKSIZE;
     }
 }
 
 
-
-
-
-// sends chunks of size 1024 to the mappers in RR fashion
+// sends chunks of size 1024 to the mappers in round robin fashion
 void sendChunkData(char *inputFile, int nMappers)
 
 {
+	//for message queue
 	key_t key;
 	int msgid, ok, ok2;
 	struct msgBuffer msg;
-	char checkString;//--> I declared this here because I do not believe you declared it somewhere
-	int characterCount = 0;//--> use this to see if a word is shared between the end of one chunk and the beginning of the next chunk
-    	char wholeString[chunkSize];//--> temporary storage
-    	memset(wholeString, '\0', chunkSize);//--> to make sure it is always null-terminated
+	char checkString;//character to hold what is returned from fgetc() later
+	int characterCount = 0;//count how many bytes were returned from fgetc() so far
+    	char wholeString[chunkSize];//holds one string read from inputFile
+    	//memset(wholeString, '\0', chunkSize);//to make sure it is always null-terminated
     	int currentChunkSize = 0;
 
 	//generate unique key
-	key = ftok(".", 5331326);//--> use your x500 as the second argument of ftok(): a TA talks about this in the most recent Canvas announcement
+	key = ftok(".", 5331326);
 
 	//creates a message queue
 	msgid = msgget(key, PERM | IPC_CREAT);
 
-	FILE* file = fopen (inputFile, "r");
-	//char line[chunkSize];//--> chunkSize Macro is defined in "utils.h"
+	FILE* file = fopen (inputFile, "r");//open the input file for reading since we want to separate the file into chunks
 
-	//--> error checking for fopen() --> see if the file pointer points to anything non-NULL
+	//error checking for fopen() --> see if the file pointer points to anything non-NULL
 	if(file == NULL){
         	perror("This file could not be opened");
         	exit(ERROR);
     	}
 
-    	mapperID = 1;
+    	mapperID = 1;//starting mapperID
 
-	//construct chunks of 1024 bytes each and send
-	//each chunk to a mapper
+	//construct chunks of 1024 bytes each and send each chunk to a mapper
 	checkString = fgetc (file);
-	while (checkString != EOF){//--> check to see if the pointer is not at the end-of-file
-		characterCount++;//--> a character has been read for current chunk
-		if(checkString != ' '){
-            		strncat(wholeString,&checkString, 1);//--> concatenate to wholeString - size of one character is 1 byte
-		}else{//--> checkString != ' '
-            //--> if at this point, we read one whole string in inputFile
-            //--> add size of a whole string
-            currentChunkSize += (characterCount-1);//--> the "-1" is to account for the space
-            int x = compareToChunkSize(currentChunkSize, characterCount, wholeString, nMappers, msg);
-            if(x == MORE_THAN_CHUNKSIZE){
-                memset(msg.msgText, '\0', MSGSIZE);//--> reset "line" (chunk)
-                compareToChunkSize((characterCount-1), characterCount, wholeString, nMappers, msg);
-            }
+	while (checkString != EOF){//check to see if reading has not reached at the end-of-file
+		characterCount++;//indicates that one character has been read for current chunk
+		if(checkString != ' '){//concatenate what fgetc() returned until a whitespace is encountered, which indicates that we are going to read a new string
+            		strncat(wholeString,&checkString, 1);
+		}else{//at this point, a whitespace has been encountered, which means we read one whole string from inputFile
+            		//add size of a whole string
+            		currentChunkSize += (characterCount-1);//subtract 1 from characterCount to account for whitespace --> don't add whitespace to the chunk yet 
+            		int x = compareToChunkSize(currentChunkSize, characterCount, wholeString, nMappers, msg);
+            		if(x == MORE_THAN_CHUNKSIZE){//means that a whole string that is read from inputFile has more than 1024 bytes
+                		memset(msg.msgText, '\0', MSGSIZE);//reset chunkData because we are going to add data to a new chunk
+                		compareToChunkSize((characterCount-1), characterCount, wholeString, nMappers, msg);
+            		}
 		}
-	    checkString = fgetc (file);//update file pointer
-	    
+	    	checkString = fgetc (file);//update position in the inputFile
 	}
 
 	//send end message to mappers
-	for (int i=0; i<nMappers; i++){
-		msg.msgType = i;//--> use mapperID (i) as the tag
-		memset(msg.msgText, '\0', MSGSIZE);
+	for (int i=1; i<=nMappers; i++){
+		msg.msgType = i;//use mapperID (which is "i") as the tag
+		memset(msg.msgText, '\0', MSGSIZE);//reset the message text because we just want to send the END message
 		sprintf(msg.msgText, "END");
-		ok2 = msgsnd(msgid, (void *)&msg, MSGSIZE, i);
+		ok2 = msgsnd(msgid, (void *)&msg, sizeof(msg.msgText), i);
+		if(ok2 == -1){
+            		perror("Could not send the data HERE");
+            		exit(ERROR);
+        	}
 	}
 	/*
 
-    //--> is this for the ACK??
+    	//--> is this for the ACK??
 	for (int i =0; i<nMappers; i++){
 		wait(msgid);
 	}
 	*/
 
-	//close message queue
-	msgctl(msgid, IPC_RMID, NULL);
-
 	fclose(file);
+	//got to end of sendChunkData
 }
 
 
@@ -202,24 +197,31 @@ int hashFunction(char* key, int reducers){
 }
 
 int getInterData(char *key, int reducerID) {
+    //for message queue
     struct msgBuffer one;
     int messageID;
     key_t key1;
-
+    
+    //generate unique key
     key1 = ftok(".", 5331326);
 
     //open message queue
     messageID = msgget (key1, PERM | IPC_CREAT);
 
-    key1 = msgrcv (messageID, (void *)&one, sizeof (one.msgText), reducerID, 0);
-    //TODO: Error checking for
+    key1 = msgrcv (messageID, (void *)&one, sizeof (one.msgText), reducerID, 0);//receive the chunkData
+    
+    //error checking
+    if(key1 == -1){
+    	perror("Could not receive the data");
+    	exit(ERROR);
+    }
 
     //check for END message
     if(one.msgText == "END"){
         return 0;//done reading data
     }else{
-        strcpy(key, one.msgText);//copy m.msgText into key
-        return 1;//more data to come
+        strcpy(key, one.msgText);//copy one.msgText into key
+        return 1;//there's more data to come
     }
 }
 
@@ -229,19 +231,15 @@ void shuffle(int nMappers, int nReducers)
   char buff[1024]; // a buffer to store the word filepath
 
   //declare the same key as in the "sendchunkdata". To be used again to open the message queue.
-
-  key_t key = ftok("project", 2); // convert the pathname "key" and the reducer identifier to a System V IPC
+  key_t key = ftok(".", 5331326); // convert the pathname "key" and the reducer identifier to a System V IPC
 
   //declare a variable msg of type struct msgBuffer to represent the chunk
-
   struct msgBuffer msg;
 
-  //open mesage queue
-
-  int mid = msgget(key, PERM | IPC_CREAT); // use permission 0644 where user, groups and other can read and write. create the message queue if it's not done so yet
+  //open message queue
+  int mid = msgget(key, PERM | IPC_CREAT); // use permission 0666 where user, groups and other can read and write. create the message queue if it's not done so yet
 
   // preparation of traversing the directory of each Mapper and send the word filepath to the reducers
-
   struct dirent *entry;
 
 
@@ -249,37 +247,36 @@ void shuffle(int nMappers, int nReducers)
   {
     sprintf(buff, "output/MapOut/Map_%d", i+1); //copy word filepath to buffer
 
-    DIR *dir = opendir(buff);  // open mapOutdirectory
+    DIR *dir = opendir(buff);  //open mapOutdirectory
 
-
-    //check if directory exists.
-
+    //error checking --> check if directory exists.
     if (dir == NULL)
     {
-      //perror("The path passed is invalid");
-      //exit(ERROR);
+      perror("The path passed is invalid");
+      exit(ERROR);
     }
 
 
-    while (entry = readdir(dir)) // traverse the directory of 1 mapper
+    while (entry = readdir(dir)) //traverse the directory of 1 mapper
     {
       if (entry->d_type == DT_REG) //verify if the type entry is pointing to is a file. if so select the reducer using a hash function
 
       {
         int reducerId = 1 + hashFunction(entry->d_name,nReducers); //selecting the reducer using the already defined hash function.
 
-        sprintf(msg.msgText, "output/MapOut/Map_%d/%s", i+1, entry->d_name);
+        sprintf(msg.msgText, "output/MapOut/Map_%d/%s", i+1, entry->d_name);//create file path using mapperID and file name
 
-        msg.msgType = i + 1;  //use reducerid as tag
+        msg.msgType = i + 1;  //use reducerID as tag
 
         //memset(msg.mtext, '\0', MSGSIZE);
 
-        int a = msgsnd(mid, &msg , MSGSIZE, 0); //
+        int a = msgsnd(mid, &msg , MSGSIZE, 0);
 
+	//error handling for msgsnd. 
         if (a == -1)
         {
-          //perror("Couldn't send the message");
-          //exit(ERROR);     //error handling for msgsnd. return -1 if cannot send the message
+          perror("Couldn't send the message");
+          exit(ERROR);     
         }
 
       }
@@ -287,23 +284,22 @@ void shuffle(int nMappers, int nReducers)
     }
 
     //close directory
-
     closedir(dir);
 
   }
 
   //send end message to reducers
-
   for (int i=0; i<nReducers; i++)
  {
     msg.msgType = nReducers + 1;//--> use reducerID (i) as the tag
     sprintf(msg.msgText, "END");
     int b = msgsnd(mid, (void *) &msg, sizeof(msg.msgText), 0);
 
+    //error handling for msgsnd()
     if(b==-1)
     {
-      //perror("Couldn't send the message");
-      //exit(ERROR); //error handling return -1 if cannot send message
+      perror("Couldn't send the message");
+      exit(ERROR);  
 
     }
   }
