@@ -1,5 +1,5 @@
 #include "utils.h"
-#include "mapper.h"//to use mapperID variable
+//#include "mapper.h"//to use mapperID variable
 #include <stdbool.h>//to use boolean variable
 #include <sys/msg.h>//-->in order to use message queues
 #define PERM 0666//--> user, group, and others each have only read and write permissions
@@ -7,6 +7,7 @@
 #define LESS_THAN_CHUNKSIZE 1
 #define EQUAL_CHUNKSIZE 2
 #define MORE_THAN_CHUNKSIZE 3
+int mapperID;
 
 char *getChunkData(int mapperID)
 
@@ -39,7 +40,9 @@ char *getChunkData(int mapperID)
   	exit(ERROR);
   }else{
   	//free(ptr);
-  	char *v = msg.msgText;
+  	char *v = malloc(MSGSIZE);
+  	strcpy(v, msg.msgText);
+  	//free(
   	return v;
   }
   

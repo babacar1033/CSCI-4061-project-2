@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
 
 	struct msgBuffer msg;
 
-	Key_t key = ftok("project", 2);
+	key_t key = ftok(".", 5331326);
 
 	int mid = msgget(key, 0644 | IPC_CREAT);
 
