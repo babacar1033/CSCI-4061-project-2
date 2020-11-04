@@ -13,8 +13,12 @@ processes.
 	2) In that same shell, use the command "make mapreduce"
 	3) In that same shell, use the command "make t1"
 
-- What exactly your program does: Our program first reads individual strings from an input file and adds them to a string that represents
-chunkData and cannot exceed 1024 bytes.  This process repeats until the input file is completely read.  Then, the master process 
+- What exactly your program does: Our program implements a single machine map-reduce thanks to the usage of 4 phases : Master ,Map , Shuffle, and Reduce .As mentioned  Inter process communication will play a key role for allowing us to get the implementation working. For the implementation to work , master has to split a the input file in chunks of size 1024 bytes and distribute it uniformly with all the mapper processes. each mapper will tokenize the text chunk received from the master and writes the <word 1 1 1...> information to word.txt files.
+Once the mappers complete, the master will call the Shuffle (implanted manually using IPC) phase to partition the word.txt files for the reducers. The files are partitioned across different reducers based on a hash function. Partitioning essentially allocates specific non-overlapping key ranges  to specific reducers to
+share the load. Once the partitioning is complete, the word.txt file paths are shared with the Reduce
+phase. Then the main program will spawn the reducer processes to carry out the final word count in the
+Reduce phase.
+
 
    
 
