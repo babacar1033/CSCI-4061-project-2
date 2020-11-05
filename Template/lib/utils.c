@@ -6,10 +6,10 @@
 int mapperID;//global variable to use mapperID in functions contained in this file
 
 char *getChunkData(int mapperID)
-
 {
   //declare the same key as in the "sendchunkdata". To be used again to open the message queue.
   key_t key = ftok(".",5331326); // convert the pathname "key" and the reducer identifier to a System V IPC
+  
   //error handling for ftok()
   if(key == -1){
   	perror("Key could not be generated");
@@ -19,17 +19,16 @@ char *getChunkData(int mapperID)
   //declare a variable msg of type struct msgBuffer to represent the chunk
   struct msgBuffer msg;
 
-  //open message queue
-  int mid = msgget(key, PERM| IPC_CREAT); // use PERM where user, groups and other can read and write. create the message queue if it's not done so yet
+  //open already existing message queue
+  int mid = msgget(key, PERM| IPC_CREAT); // use PERM: user, groups and other can read and write. create the message queue if it's not done so yet
   
   //error handling for msgget()
-  if(mid == -1)
-  {
+  if(mid == -1){
     perror("Could not get message identifier");
     exit(ERROR);
   }
 
-  int checkStatus = msgrcv(mid, &msg, sizeof(msg.msgText), mapperID, 0); //receive data from the master who was supposed to send a specific mapperID
+  int checkStatus = msgrcv(mid, &msg, sizeof(msg.msgText), mapperID, 0); //receive data from the master who was supposed to send the data to a specific mapperID
   if(checkStatus == -1){
   	//error handling for msgrcv
   	perror("Could not receive the data");
@@ -38,7 +37,7 @@ char *getChunkData(int mapperID)
   	if(strcmp(msg.msgText, "END")==0){
   		return NULL;//pointer
   	}else{
-  		char *v = (char *)malloc(sizeof(char)*(chunkSize+1));
+  		char *v = (char *)malloc(sizeof(char)*(chunkSize+1));//dynamically allocate 1025 bytes of memory
 		memset(v, '\0', chunkSize +1);
 		strcpy(v, msg.msgText);
   		return v;
@@ -49,7 +48,6 @@ char *getChunkData(int mapperID)
 
 // sends chunks of size 1024 to the mappers in round robin fashion
 void sendChunkData(char *inputFile, int nMappers)
-
 {
 	//for message queue
 	key_t key;
@@ -125,8 +123,8 @@ void sendChunkData(char *inputFile, int nMappers)
             	//replace wholeString with word
             	strcpy(wholeString, word);
             			
-            	}
             }
+        }
 	}
 	
 	//at this point, we have reached EOF --> send out whole string even if whole string size is not chunkSize
