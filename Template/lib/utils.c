@@ -1,15 +1,9 @@
 #include "utils.h"
-#include <stdbool.h>//to use boolean variable
 #include <sys/msg.h> //in order to use message queues
 #define PERM 0666//user, group, and others each have only read and write permissions
 #define ERROR 0//for errors in the code
 
-//Macros that indicate if cases in sendChunkData's helper function
-#define LESS_THAN_CHUNKSIZE 1
-#define EQUAL_CHUNKSIZE 2
-#define MORE_THAN_CHUNKSIZE 3
-
-int mapperID;//global variable to use mapperID in functions in this file
+int mapperID;//global variable to use mapperID in functions contained in this file
 
 char *getChunkData(int mapperID)
 
@@ -53,88 +47,6 @@ char *getChunkData(int mapperID)
 }
 
 
-
-
-
-//helper function for sendChunkData()
-int compareToChunkSize(int currentChunkSize, int characterCount, char *wholeString, int nMappers, struct msgBuffer msg){
-    key_t key;
-    int msgid, ok;
-    
-    //generate unique key
-    key = ftok(".", 5331326);
-    
-    //error handling for ftok()
-    if(key == -1){
-  	perror("Key could not be generated");
-  	exit(ERROR);
-    }
-
-    //creates a message queue
-    msgid = msgget(key, PERM | IPC_CREAT);
-    
-    //error handling for msgget()
-    if(msgid == -1){
-    	perror("Could not get message identifier");
-    	exit(ERROR);
-    }
-    
-    if(currentChunkSize < chunkSize){
-        strcat(msg.msgText,wholeString);//concatenate wholeString to msg.msgText (which is chunkData thus far)
-        strcat(msg.msgText," ");//add whitespace character at end of msg.msgText
-        memset(wholeString, '\0', chunkSize);//reset "wholeString" because we are going to read a new whole string from inputFile
-        return LESS_THAN_CHUNKSIZE;
-    }else if(currentChunkSize > chunkSize){
-    	bool yes = true;
-    	int i;
-    	for(i = 0; i < MSGSIZE; i++){
-    		if(msg.msgText[i] != '\0'){
-    			yes = false;//this means memset() was not just called on msg.msgText
-    		}
-    	}
-        if(true){//msg.msgText just consists of null terminators
-            //at this point, we just started a new chunk to add chunkData to.  Also, in the else if, the size of the whole string exceeds 1024 bytes
-            //so we cannot add it to the chunk
-            perror("Word in chunk is too long - cannot be sent without being separated.");
-            exit(ERROR);
-        }
-        
-        //At this point, DO NOT concatenate whole string to "msg.msgText" because according to the else if case, the size of the whole string exceeds 1024 bytes
-        //we will add this string to the next chunk. 
-        msg.msgType = mapperID%nMappers +1;
-        ok = msgsnd(msgid, (void *) &msg, sizeof(msg.msgText), 0);//send this chunk (without the long whole string) off to a mapper
-        
-        if(ok == -1){
-            perror("Could not send the data");
-            exit(ERROR);
-        }
-        
-        
-        
-        return MORE_THAN_CHUNKSIZE;
-    }else{
-        strcat(msg.msgText,wholeString);//concatenate wholeString to msg.msgText (which is chunk data thus far)
-        strcat(msg.msgText," ");//add whitespace character at end of msg.msgText
-        msg.msgType = mapperID%nMappers +1;
-        ok = msgsnd(msgid, (void *) &msg, sizeof(msg.msgText), mapperID);//send this chunk off to a mapper because the chunkData is full
-        if(ok == -1){
-            perror("Could not send the data");
-            exit(ERROR);
-        }
-        
-        
-        
-        //reset characterCount, currentChunkSize, and "msg.msgText" (chunk data) because we are to start a new chunk
-        characterCount = 0;
-        currentChunkSize = 0;
-        memset(msg.msgText, '\0', MSGSIZE);
-        
-        memset(wholeString, '\0', chunkSize);//reset "wholeString" because we are going to read a new whole string from inputFile
-        return EQUAL_CHUNKSIZE;
-    }
-}
-
-
 // sends chunks of size 1024 to the mappers in round robin fashion
 void sendChunkData(char *inputFile, int nMappers)
 
@@ -148,6 +60,9 @@ void sendChunkData(char *inputFile, int nMappers)
     	char wholeString[chunkSize+1];//holds one string read from inputFile, the +1 is to account for '\0' outside of the 1024 byte count
     	memset(wholeString, '\0', chunkSize+1);//to make sure wholeString is always null-terminated when adding individual characters to it
     	int currentChunkSize = 0;
+    	memset(msg.msgText, '\0', MSGSIZE);
+    	
+    	char word[100];//to hold string that will be used for next chunk
     	
 	//generate unique key
 	key = ftok(".", 5331326);
@@ -162,80 +77,78 @@ void sendChunkData(char *inputFile, int nMappers)
 	msgid = msgget(key, PERM | IPC_CREAT);
 	
 	//error handling for msgget()
-    	if(msgid == -1){
-    		perror("Could not get message identifier");
-    		exit(ERROR);
-    	}
+    if(msgid == -1){
+    	perror("Could not get message identifier");
+    	exit(ERROR);
+    }
 	
 
 	FILE* file = fopen (inputFile, "r");//open the input file for reading since we want to separate the file into chunks
 
 	//error checking for fopen() --> see if the file pointer points to anything non-NULL
 	if(file == NULL){
-        	perror("This file could not be opened");
-        	exit(ERROR);
-    	}
+        perror("This file could not be opened");
+        exit(ERROR);
+    }
 
-    	mapperID = 1;//starting mapperID
+    mapperID = 0;//starting mapperID
     	
-    	char word[100];
-    	
-
 	//construct chunks of 1024 bytes each and send each chunk to a mapper
 	checkString = fgetc (file);
 	while (checkString != EOF){//check to see if reading has not reached at the end-of-file
 		memset(word, '\0', 100);
-		printf("%c", checkString);
-		strncat(word, &checkString, 1);
-		characterCount++;//indicates that one character has been read for current chunk
-		if(checkString != ' ' or checkString != '\n' or checkString != EOF){//concatenate what fgetc() returned until a whitespace is encountered, which indicates that we are going to read a new string
-			if((strlen(word) + currentChunkSize)<chunkSize){
-				currentChunkSize += strlen(word);
-            			strcat(wholeString,word);
-            			continue;
-            		}else{
-            			//send message (wholeString)
-            			//replace whole String with word
-            			//when EOF --> send out whole string even if whole string size is not chunksize
-            		}
-		}else{//at this point, a whitespace has been encountered, which means we read one whole string from inputFile
-            		//add size of a whole string
-            		currentChunkSize += (characterCount-1);//subtract 1 from characterCount to account for whitespace --> don't add whitespace to the chunk yet 
-            		int x = compareToChunkSize(currentChunkSize, characterCount, wholeString, nMappers, msg);
-            		if(x == MORE_THAN_CHUNKSIZE){//means that a whole string that is read from inputFile has more than 1024 bytes
-                		memset(msg.msgText, '\0', MSGSIZE);//reset chunkData because we are going to add data to a new chunk
-                		compareToChunkSize((characterCount-1), characterCount, wholeString, nMappers, msg);
-            		}else if(x == LESS_THAN_CHUNKSIZE){
-            			checkString = fgetc (file);//update position in the inputFile
-            			if(checkString == EOF){
-            				msg.msgType = mapperID%nMappers +1;
-        				ok = msgsnd(msgid, (void *) &msg, sizeof(msg.msgText), mapperID);//send this chunk off to a mapper because EOF
-            			}
-            		}
-		}
-	    	checkString = fgetc (file);//update position in the inputFile
-	    	printf("%c", checkString);
+		printf("Checkstring: %c\n", checkString);
+		strncat(word, &checkString, 1);//concatenate the character just read to the word
+		printf("word: %s\n", word);
+		//characterCount++;//indicates that one character has been read for current chunk
+	
+		//concatenate what fgetc() returned until a whitespace, newline character, or EOF is encountered, which indicates that we are going to read a new string
+		if((checkString != ' ') | (checkString != '\n') | (checkString != EOF)){
+			printf("strlen(word) + currentChunkSize: %ld\n", (strlen(word) + currentChunkSize));
+			if((strlen(word) + currentChunkSize) < chunkSize){
+				currentChunkSize += strlen(word);//current size of chunkData
+				printf("currentChunkSize: %d\n", currentChunkSize);
+            	strcat(wholeString,word);
+            	printf("wholeString:%s\n", wholeString);
+            	checkString = fgetc (file);//update position in the inputFile
+            	printf("Checkstring in if-statement:%c\n", checkString);
+            	continue;//then check to see if at EOF 
+            }else{//then the chunk will be too big if you add the string --> so send the chunk and save the word for the next chunk
+            	//send message (wholeString)
+            	strcat(msg.msgText,wholeString);//concatenate wholeString to msg.msgText (which is the current mapper's chunkData)
+            	msg.msgType = mapperID%nMappers +1;//want to keep iterating through mappers until all the data is sent
+            	ok = msgsnd(msgid, (void *) &msg, sizeof(msg.msgText), mapperID);//send this chunk off to a mapper because the chunkData is full
+            	memset(msg.msgText, '\0', MSGSIZE);//reset chunkData because we are going to add data to a new chunk
+            	//reset currentChunkSize
+            	currentChunkSize = 0;
+            			
+            	//replace wholeString with word
+            	strcpy(wholeString, word);
+            			
+            	}
+            }
 	}
+	
+	//at this point, we have reached EOF --> send out whole string even if whole string size is not chunkSize
+	strcat(msg.msgText,wholeString);//concatenate wholeString to msg.msgText (which is the current mapper's chunkData)
+	printf("chunkData: %s\n", msg.msgText);
+    msg.msgType = mapperID%nMappers +1;//iterate to next mapper
+    printf("mapperID: %ld\n", msg.msgType);
+    ok = msgsnd(msgid, (void *) &msg, sizeof(msg.msgText), mapperID);//send this chunk off to a mapper because the chunkData is full
+    //at this point, we are done sending chunkData    		
 
-	//send end message to mappers
+	//send END message to mappers
 	for (int i=1; i<=nMappers; i++){
 		msg.msgType = i;//use mapperID (which is "i") as the tag
 		memset(msg.msgText, '\0', MSGSIZE);//reset the message text because we just want to send the END message
 		sprintf(msg.msgText, "END");
 		ok2 = msgsnd(msgid, (void *)&msg, sizeof(msg.msgText), i);
 		if(ok2 == -1){
-            		perror("Could not send the data");
-            		exit(ERROR);
-        	}
+            perror("Could not send the data");
+            exit(ERROR);
+        }
 	}
-	/*
-
-    	//--> is this for the ACK??
-	for (int i =0; i<nMappers; i++){
-		wait(msgid);
-	}
-	*/
-
+	
 	fclose(file);
 	//got to end of sendChunkData
 }

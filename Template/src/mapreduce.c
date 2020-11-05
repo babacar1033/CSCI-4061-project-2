@@ -99,7 +99,6 @@ int main(int argc, char *argv[]) {
 	
 	//creates a message queue
 	int msgid = msgget(key, PERM | IPC_CREAT);
-
  	
 	msgctl(msgid, IPC_RMID, 0);
 	return 0;
