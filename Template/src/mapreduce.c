@@ -25,7 +25,44 @@ void execute(char **argv, int nProcesses){
      }
 }
 
+void closeAllQueue()
+{
+	key_t key;
+	key_t key2;
+	int msgid, msgid2;
+	printf("Closing all qeueus before using\n");
+	//generate unique key
+	key = ftok(".", 5331326);
+
+	//generate key for message queue for END messages
+	key2 = ftok(".", 5436781);
+
+	//error handling for ftok()
+	if(key == -1){
+		perror("Key could not be generated");
+		exit(ERROR);
+	}
+
+	if(key2 == -1){
+		perror("Key could not be generated");
+		exit(ERROR);
+	}
+
+	//creates a message queue
+	msgid = msgget(key, PERM | IPC_CREAT);
+
+	//create message queue 2
+	msgid2 = msgget(key2, PERM | IPC_CREAT);
+	
+	// Close queues before use
+	msgctl(msgid, IPC_RMID, 0);
+	msgctl(msgid2, IPC_RMID, 0);
+	
+}
+
 int main(int argc, char *argv[]) {
+	
+	closeAllQueue();
 	
 	if(argc < 4) {
 		printf("Less number of arguments.\n");
@@ -55,7 +92,7 @@ int main(int argc, char *argv[]) {
 	if(pid == 0){
 		//send chunks of data to the mappers in RR fashion
 		sendChunkData(inputFile, nMappers);
-		
+		printf("Terminated sendchunk\n");
 		exit(0);
 	}
 	sleep(1);
@@ -66,7 +103,9 @@ int main(int argc, char *argv[]) {
 	execute(mapperArgv, nMappers);
 
 	// wait for all children to complete execution
+	printf("Here\n");
     while (wait(&status) > 0);
+    printf("There\n");
     key_t key = ftok(".", 5331326);
     int msgid = msgget(key, PERM | IPC_CREAT);
     msgctl(msgid, IPC_RMID, 0);
@@ -87,7 +126,9 @@ int main(int argc, char *argv[]) {
 	execute(reducerArgv, nReducers);
 
 	// wait for all children to complete execution
+	printf("Here\n");
     while (wait(&status) > 0);
+	printf("there\n");
     key_t key2 = ftok(".", 5436781);
     if(key2 == -1){
   		perror("Key could not be generated");

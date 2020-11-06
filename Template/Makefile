@@ -23,7 +23,7 @@ $(LIBDIR)/utils.o: $(LIBDIR)/utils.c
 t1:
 # 	make -i clean
 # 	make
-	./mapreduce 5 2 test/T1/F1.txt
+	./mapreduce 2 2 test/T1/F1.txt
 
 clean:
 	rm lib/utils.o mapreduce mapper reducer

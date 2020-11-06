@@ -216,6 +216,6 @@ int main(int argc, char *argv[]) {
 	//student code
 	writeIntermediateDS();
 	freeInterDS(interDS);
-
+	printf("Mapper terminated %d\n", mapperID);
 	return 0;
 }

@@ -136,5 +136,6 @@ int main(int argc, char *argv[]) {
 	writeFinalDS(reducerID);
 
 	freeFinalDS(finalDS);
+	printf("Reducer terminated\n");
 	return 0;
 }

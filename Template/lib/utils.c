@@ -34,7 +34,8 @@ char *getChunkData(int mapperID)
   	perror("Could not receive the data");
   	exit(ERROR);
   }else{
-  	if(strcmp(msg.msgText, "END")==0){
+  	if(strlen(msg.msgText)==0){
+  	// END message
   		return NULL;//pointer
   	}else{
   		char *v = (char *)malloc(sizeof(char)*(chunkSize+1));//dynamically allocate 1025 bytes of memory
@@ -113,29 +114,31 @@ void sendChunkData(char *inputFile, int nMappers)
 	checkString = fgetc (file);
 	while (checkString != EOF){//check to see if reading has not reached at the end-of-file
 		memset(word, '\0', 100);
-		printf("Checkstring: %c\n", checkString);
+	//	printf("Checkstring: %c\n", checkString);
 		strncat(word, &checkString, 1);//concatenate the character just read to the word
-		printf("word: %s\n", word);
+	//	printf("word: %s\n", word);
 		//characterCount++;//indicates that one character has been read for current chunk
 	
 		//concatenate what fgetc() returned until a whitespace, newline character, or EOF is encountered, which indicates that we are going to read a new string
 		if((checkString != ' ') | (checkString != '\n') | (checkString != EOF)){
-			printf("strlen(word) + currentChunkSize: %ld\n", (strlen(word) + currentChunkSize));
+	//		printf("strlen(word) + currentChunkSize: %ld\n", (strlen(word) + currentChunkSize));
 			if((strlen(word) + currentChunkSize) < chunkSize){
 				currentChunkSize += strlen(word);//current size of chunkData
-				printf("currentChunkSize: %d\n", currentChunkSize);
+	//			printf("currentChunkSize: %d\n", currentChunkSize);
             	strcat(wholeString,word);
-            	printf("wholeString:%s\n", wholeString);
+//            	printf("wholeString:%s\n", wholeString);
             	checkString = fgetc (file);//update position in the inputFile
-            	printf("Checkstring in if-statement:%c\n", checkString);
+  //          	printf("Checkstring in if-statement:%c\n", checkString);
             	continue;//then check to see if at EOF 
             }else{//then the chunk will be too big if you add the string --> so send the chunk and save the word for the next chunk
             	//send message (wholeString)
             	strcat(msg.msgText,wholeString);//concatenate wholeString to msg.msgText (which is the current mapper's chunkData)
-            	printf("chunkData: %s\n", msg.msgText);
-            	msg.msgType = mapperID%nMappers +1;//want to keep iterating through mappers until all the data is sent
+//            	printf("chunkData: %s\n", msg.msgText);
+            	msg.msgType = mapperID +1; //want to keep iterating through mappers until all the data is sent
+            	// Move to next mapper
+            	mapperID = (mapperID+1)%nMappers;
             	ok = msgsnd(msgid, (void *) &msg, sizeof(msg.msgText), 0);//send this chunk off to a mapper because the chunkData is full
-            	printf("mapperID: %ld\n", msg.msgType);
+  //          	printf("mapperID: %ld\n", msg.msgType);
             	memset(msg.msgText, '\0', MSGSIZE);//reset chunkData because we are going to add data to a new chunk
             	//reset currentChunkSize
             	currentChunkSize = 0;
@@ -149,9 +152,9 @@ void sendChunkData(char *inputFile, int nMappers)
 	
 	//at this point, we have reached EOF --> send out whole string even if whole string size is not chunkSize
 	strcat(msg.msgText,wholeString);//concatenate wholeString to msg.msgText (which is the current mapper's chunkData)
-	printf("chunkData: %s\n", msg.msgText);
+	//printf("chunkData: %s\n", msg.msgText);
     msg.msgType = mapperID%nMappers +1;//iterate to next mapper
-    printf("mapperID: %ld\n", msg.msgType);
+  //  printf("mapperID: %ld\n", msg.msgType);
     ok = msgsnd(msgid, (void *) &msg, sizeof(msg.msgText), 0);//send this chunk off to a mapper because the chunkData is full
     //at this point, we are done sending chunkData    		
 
@@ -160,14 +163,14 @@ void sendChunkData(char *inputFile, int nMappers)
 	
 	//send END message to mappers
 	for (int i=1; i<=nMappers; i++){
-	printf("in sendChunk: i = %d\n", i);
+//	printf("in sendChunk: i = %d\n", i);
 		msg2.msgType = i;//use mapperID (which is "i") as the tag
 		memset(msg.msgText, '\0', MSGSIZE);//reset the message text because we just want to send the END message
-		printf("msg2Text: %s\n", msg2.msgText);
-		sprintf(msg2.msgText, "END");
-		printf("msg2Text: %s\n", msg2.msgText);
-		ok2 = msgsnd(msgid2, (void *)&msg2, sizeof(msg2.msgText), 0);
-		printf("ok2: %d\n", ok2);
+//		printf("msg2Text: %s\n", msg2.msgText);
+		sprintf(msg2.msgText, "");
+//		printf("msg2Text: %s\n", msg2.msgText);
+		ok2 = msgsnd(msgid, (void *)&msg2, sizeof(msg2.msgText), 0);
+//		printf("ok2: %d\n", ok2);
 		if(ok2 == -1){
             perror("Could not send the data");
             exit(ERROR);
@@ -175,7 +178,6 @@ void sendChunkData(char *inputFile, int nMappers)
 	}
 	//intf("AT THIS POINT"
 	//int msgsnd(int msgid, const void *msgp, size_t msgsz, int msgflg)
-	
 	fclose(file);
 	
 }
@@ -233,9 +235,9 @@ int getInterData(char *key, int reducerID) {
     	perror("Could not receive the data");
     	exit(ERROR);
     }
-
+	
     //check for END message
-    if(strcmp(one.msgText,"END")==0){
+    if(strlen(one.msgText)==0){
         return 0;//done reading data
     }else{
         strcpy(key, one.msgText);//copy one.msgText into key
@@ -301,7 +303,6 @@ void shuffle(int nMappers, int nReducers)
         //memset(msg.mtext, '\0', MSGSIZE);
 
         int a = msgsnd(mid, &msg , MSGSIZE, 0);
-
 	//error handling for msgsnd. 
         if (a == -1)
         {
@@ -317,12 +318,12 @@ void shuffle(int nMappers, int nReducers)
     closedir(dir);
 
   }
-
+  
   //send end message to reducers
   for (int i=0; i<nReducers; i++)
  {
     msg.msgType = nReducers + 1;//--> use reducerID (i) as the tag
-    sprintf(msg.msgText, "END");
+    sprintf(msg.msgText, "");
     int b = msgsnd(mid, (void *) &msg, sizeof(msg.msgText), 0);
 
     //error handling for msgsnd()
