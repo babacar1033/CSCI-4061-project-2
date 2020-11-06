@@ -51,19 +51,24 @@ void sendChunkData(char *inputFile, int nMappers)
 {
 	//for message queue
 	key_t key;
-	int msgid, ok, ok2;
+	key_t key2;
+	int msgid, msgid2, ok, ok2;
 	struct msgBuffer msg;
+	struct msgBuffer msg2;
 	char checkString;//character to hold what is returned from fgetc() later
 	int characterCount = 0;//count how many bytes were returned from fgetc() so far
-    	char wholeString[chunkSize+1];//holds one string read from inputFile, the +1 is to account for '\0' outside of the 1024 byte count
-    	memset(wholeString, '\0', chunkSize+1);//to make sure wholeString is always null-terminated when adding individual characters to it
-    	int currentChunkSize = 0;
-    	memset(msg.msgText, '\0', MSGSIZE);
+    char wholeString[chunkSize+1];//holds one string read from inputFile, the +1 is to account for '\0' outside of the 1024 byte count
+    memset(wholeString, '\0', chunkSize+1);//to make sure wholeString is always null-terminated when adding individual characters to it
+    int currentChunkSize = 0;
+    memset(msg.msgText, '\0', MSGSIZE);
     	
-    	char word[100];//to hold string that will be used for next chunk
+    char word[100];//to hold string that will be used for next chunk
     	
 	//generate unique key
 	key = ftok(".", 5331326);
+	
+	//generate key for message queue for END messages
+	key2 = ftok(".", 5436781);
 	
 	//error handling for ftok()
   	if(key == -1){
@@ -71,11 +76,24 @@ void sendChunkData(char *inputFile, int nMappers)
   		exit(ERROR);
 	}
 	
+	if(key2 == -1){
+  		perror("Key could not be generated");
+  		exit(ERROR);
+	}
+	
 	//creates a message queue
 	msgid = msgget(key, PERM | IPC_CREAT);
 	
+	//create message queue 2
+	msgid2 = msgget(key2, PERM | IPC_CREAT);
+	
 	//error handling for msgget()
     if(msgid == -1){
+    	perror("Could not get message identifier");
+    	exit(ERROR);
+    }
+    
+    if(msgid2 == -1){
     	perror("Could not get message identifier");
     	exit(ERROR);
     }
@@ -114,8 +132,10 @@ void sendChunkData(char *inputFile, int nMappers)
             }else{//then the chunk will be too big if you add the string --> so send the chunk and save the word for the next chunk
             	//send message (wholeString)
             	strcat(msg.msgText,wholeString);//concatenate wholeString to msg.msgText (which is the current mapper's chunkData)
+            	printf("chunkData: %s\n", msg.msgText);
             	msg.msgType = mapperID%nMappers +1;//want to keep iterating through mappers until all the data is sent
-            	ok = msgsnd(msgid, (void *) &msg, sizeof(msg.msgText), mapperID);//send this chunk off to a mapper because the chunkData is full
+            	ok = msgsnd(msgid, (void *) &msg, sizeof(msg.msgText), 0);//send this chunk off to a mapper because the chunkData is full
+            	printf("mapperID: %ld\n", msg.msgType);
             	memset(msg.msgText, '\0', MSGSIZE);//reset chunkData because we are going to add data to a new chunk
             	//reset currentChunkSize
             	currentChunkSize = 0;
@@ -132,23 +152,32 @@ void sendChunkData(char *inputFile, int nMappers)
 	printf("chunkData: %s\n", msg.msgText);
     msg.msgType = mapperID%nMappers +1;//iterate to next mapper
     printf("mapperID: %ld\n", msg.msgType);
-    ok = msgsnd(msgid, (void *) &msg, sizeof(msg.msgText), mapperID);//send this chunk off to a mapper because the chunkData is full
+    ok = msgsnd(msgid, (void *) &msg, sizeof(msg.msgText), 0);//send this chunk off to a mapper because the chunkData is full
     //at this point, we are done sending chunkData    		
 
+
+	
+	
 	//send END message to mappers
 	for (int i=1; i<=nMappers; i++){
-		msg.msgType = i;//use mapperID (which is "i") as the tag
+	printf("in sendChunk: i = %d\n", i);
+		msg2.msgType = i;//use mapperID (which is "i") as the tag
 		memset(msg.msgText, '\0', MSGSIZE);//reset the message text because we just want to send the END message
-		sprintf(msg.msgText, "END");
-		ok2 = msgsnd(msgid, (void *)&msg, sizeof(msg.msgText), i);
+		printf("msg2Text: %s\n", msg2.msgText);
+		sprintf(msg2.msgText, "END");
+		printf("msg2Text: %s\n", msg2.msgText);
+		ok2 = msgsnd(msgid2, (void *)&msg2, sizeof(msg2.msgText), 0);
+		printf("ok2: %d\n", ok2);
 		if(ok2 == -1){
             perror("Could not send the data");
             exit(ERROR);
         }
 	}
+	//intf("AT THIS POINT"
+	//int msgsnd(int msgid, const void *msgp, size_t msgsz, int msgflg)
 	
 	fclose(file);
-	//got to end of sendChunkData
+	
 }
 
 
@@ -188,11 +217,19 @@ int getInterData(char *key, int reducerID) {
     	perror("Could not get message identifier");
     	exit(ERROR);
     }
+    
+    
+    //int msgsnd(int msgid, const void *msgp, size_t msgsz, int msgflg)
+    
+    //int msgrcv(int msgid, const void *msgp, size_t msgsz, long msgtype, int msgflg)
+    
+    
+    
 
-    key1 = msgrcv (messageID, (void *)&one, sizeof (one.msgText), reducerID, 0);//receive the chunkData
+    int x = msgrcv (messageID, (void *)&one, sizeof (one.msgText), reducerID, 0);//receive the chunkData
     
     //error checking for msgrcv
-    if(key1 == -1){
+    if(x == -1){
     	perror("Could not receive the data");
     	exit(ERROR);
     }
@@ -209,7 +246,7 @@ int getInterData(char *key, int reducerID) {
 void shuffle(int nMappers, int nReducers)
 
 {
-  char buff[1024]; // a buffer to store the word filepath
+  char buff[chunkSize]; // a buffer to store the word filepath
 
   //declare the same key as in the "sendchunkdata". To be used again to open the message queue.
   key_t key = ftok(".", 5331326); // convert the pathname "key" and the reducer identifier to a System V IPC
